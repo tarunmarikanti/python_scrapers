@@ -1,0 +1,50 @@
+from sentence_transformers import SentenceTransformer
+import json
+import numpy as np
+
+model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
+
+input_file = 'Forgrouped_vegetable_and_fruit_names.json'
+
+with open(input_file, 'r') as f:
+    data = json.load(f)
+
+product_names = data["All Products"]  
+
+categories = [
+    "Dill Leaves", "Tomato", "Apple", "Mushroom", "Pumpkin", "Ginger", "Banana", 
+    "Drumstick", "Lettuce", "Cauliflower", "Beans", "Potato", 
+    "Orange", "Fenugreek", "Asparagus", "Spinach", "Pomegranate", "Tulsi Leaves", "Thyme",
+    "Beetroot", "Corn", "Amaranthus", "Muskmelon", "Lemon", "Bottle Gourd", "Guava", 
+    "Zucchini", "Bell Peppers", "Dragon Fruit", "Mango", "Drumsticks", 
+    "Cabbage", "Carrot", "Brinjal", "Broccoli", "Gourmet", "Capsicum", "Rosemary",
+    "Onion", "Coconut", "Papaya", "Garlic", "Cucumber", "Avocado", "Ridge Gourd", 
+    "Lime", "French Beans", "Kale Leaves", "Lady Finger", "Peas", 
+    "Chilli", "Sprouts", "Snake Gourd", "Pear", "Pointed Gourd", "Litchi", "Fig"
+    "Watermelon", "Mosambi", "Cowpea", "Parsley", "Gongura", "Mint", "Bitter Gourd", 
+    "Grapes", "Coriander", "Celery", "Custard Apple", "Ash Gourd", 
+    "Betel Leaves", "Sugarcane", "Radish", "Kiwi", "Persimmon", "Blueberry", "Gooseberry",
+    "Colocasia", "Turmeric", "Longan", "Tamarind", "Yam", "Chikoo", "Chukkakura", 
+    "Pineapple", "Cherries", "Plum", "Curry Leaves", "Lemongrass", 
+    "Roquette", "Sponge Gourd", "Groundnut", "Jalapeno"
+]
+
+product_embeddings = model.encode(product_names)
+category_embeddings = model.encode(categories)
+
+grouped_products = {category: [] for category in categories}
+
+for i, product in enumerate(product_names):
+    product_embedding = product_embeddings[i]
+    
+    similarities = np.dot(category_embeddings, product_embedding)  # Cosine similarity is used here implicitly
+    best_category_idx = np.argmax(similarities)  # Find the index of the most similar category
+    best_category = categories[best_category_idx]
+    
+    grouped_products[best_category].append(product)
+
+output_file = 'grouped_products_final.json'
+with open(output_file, 'w') as f:
+    json.dump(grouped_products, f, indent=4)
+
+print(f"Products have been grouped semantically and saved to {output_file}")
