@@ -1,0 +1,52 @@
+import os
+import json
+import requests
+import re  
+
+light_colored_items = ["Banana", "Tender Coconut", "Cauliflower", "White Onion", "Radish"]
+
+def create_folder(folder_name):
+    desktop = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop')
+    folder_path = os.path.join(desktop, folder_name)
+    os.makedirs(folder_path, exist_ok=True)
+    return folder_path
+
+def sanitize_filename(name):
+    return re.sub(r'[<>:"/\\|?*]', '', name)
+
+def download_image(prompt, save_path):
+    url_safe_prompt = prompt.replace(" ", "_")
+    url = f"https://pollinations.ai/p/{url_safe_prompt}"
+    response = requests.get(url, stream=True)
+    
+    if response.status_code == 200:
+        sanitized_prompt = sanitize_filename(prompt)
+        image_path = os.path.join(save_path, f"{sanitized_prompt}.jpg")
+        with open(image_path, 'wb') as file:
+            file.write(response.content)
+        print(f"Downloaded: {prompt}")
+    else:
+        print(f"Failed to download image for {prompt} (Status Code: {response.status_code})")
+
+def generate_images_from_json(json_url, folder_name):
+    response = requests.get(json_url)
+    if response.status_code != 200:
+        print("Failed to fetch JSON data")
+        return
+    
+    data = response.json()
+    folder_path = create_folder(folder_name)
+    
+    for category in ['vegetables', 'fruits']:
+        if category in data:
+            for item in data[category]:
+                name = item.get("name")
+                if name:
+                    plate_color = "black" if any(light_item.lower() in name.lower() for light_item in light_colored_items) else "white"
+                    prompt = f"raw uncut {name} on a {plate_color} plate"0
+                    download_image(prompt, folder_path)
+
+json_url = "https://staticapis.pragament.com/products/vegetables_fruits.json"
+folder_name = "Fruits_and_Vegetables_Images"
+
+generate_images_from_json(json_url, folder_name)

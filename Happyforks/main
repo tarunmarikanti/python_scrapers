@@ -1,0 +1,123 @@
+import json
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
+import time
+
+options = webdriver.ChromeOptions()
+options.add_argument('--headless')  
+options.add_argument('--disable-gpu') 
+options.add_argument('--no-sandbox')  
+driver = webdriver.Chrome(options=options)
+
+# URLs to scrape
+urls = [
+    {"url": 'https://happyforks.com/browse/food?cat=11&tag=48', "category": "vegetables"},
+    {"url": 'https://happyforks.com/browse/food?tag=48&cat=9', "category": "fruits"}
+]
+
+# Define dictionary to store vegetable and fruit data
+combined_data = {"vegetables": [], "fruits": []}
+
+# Loop through each URL
+for entry in urls:
+    driver.get(entry["url"])
+    category = entry["category"]
+
+    while True:
+        # Click all "More" buttons to reveal additional items on the page
+        while True:
+            try:
+                more_button = driver.find_element(By.CSS_SELECTOR, '.ico-more')
+                more_button.click()
+                time.sleep(3)  
+            except NoSuchElementException:
+                break
+
+        # Scroll back to the top of the page
+        driver.execute_script("window.scrollTo(0, 0);")
+        time.sleep(1)  
+
+        # Locate all items (vegetables or fruits) on the page
+        items = driver.find_elements(By.CSS_SELECTOR, "div.item-wrap")
+
+        for item in items:
+            # Extract item name
+            name = item.find_element(By.CSS_SELECTOR, "div.content.no-meal-attrs h2 > a").text
+            print("Item found: " + name)
+            # Only pick items with "raw" in their name
+            if "raw" in name.lower():
+                # Extract kcal value
+                print("Extracting kcal value for: " + name)
+                try:
+                    kcal = item.find_element(By.CSS_SELECTOR, "ul.meal-data.type-a li span.txa").text
+                except NoSuchElementException:
+                    kcal = "N/A"  # Handle missing kcal data
+
+                # Hover to reveal nutrient values
+                try:
+                    # Find the element to hover over
+                    hover_element = item.find_element(By.CSS_SELECTOR, "div.chart-wrap-center.legend-hover")
+                    actions = ActionChains(driver)
+                    actions.move_to_element(hover_element).perform()
+                    time.sleep(1)  
+
+                    # Extract protein, fat, and carbs
+                    print("Extracting other nutrient values for: " + name) 
+                    protein_text = item.find_element(By.XPATH, ".//div[@class='chart-pie-legend']//li[contains(text(), 'Protein')]").text
+                    fat_text = item.find_element(By.XPATH, ".//div[@class='chart-pie-legend']//li[contains(text(), 'Fat')]").text
+                    carbs_text = item.find_element(By.XPATH, ".//div[@class='chart-pie-legend']//li[contains(text(), 'Carbs')]").text
+
+                    # Safely extract the values
+                    protein = protein_text.split(": ")[1] if ": " in protein_text else "N/A"
+                    fat = fat_text.split(": ")[1] if ": " in fat_text else "N/A"
+                    carbs = carbs_text.split(": ")[1] if ": " in carbs_text else "N/A"
+
+                except (NoSuchElementException, IndexError):
+                    protein, fat, carbs = "N/A", "N/A", "N/A"  # Handle cases where nutrients are missing
+
+                # Append this item's data to the list of the corresponding category (vegetables or fruits)
+                combined_data[category].append({
+                    "Name": name,
+                    "Kcal": kcal,
+                    "Protein": protein,
+                    "Fat": fat,
+                    "Carbohydrates": carbs
+                })
+
+        # Attempt to go to the next page
+        try:
+            next_button = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, '.next'))
+            )
+            next_button.click()
+            time.sleep(3)  
+        except (NoSuchElementException, TimeoutException):
+            print(f"No more pages to scrape for {category}.")
+            break  # Exit the main loop if there are no more pages
+
+# Write combined data to JSON file
+with open("combined_data_raw.json", "w") as file:
+    json.dump(combined_data, file, indent=4)
+
+print("Scraping complete.")
+with open("combined_data_raw.json", "r") as file:
+    combined_data = json.load(file)
+
+
+total_vegetables = len(combined_data["vegetables"])
+total_fruits = len(combined_data["fruits"])
+
+
+total_items = total_vegetables + total_fruits
+
+
+print(f"Total number of vegetables: {total_vegetables}")
+print(f"Total number of fruits: {total_fruits}")
+print(f"Total number of items: {total_items}")
+
+
+driver.quit()
